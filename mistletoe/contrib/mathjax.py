@@ -5,6 +5,7 @@ Provides MathJax support for rendering Markdown with LaTeX to html.
 from mistletoe.html_renderer import HtmlRenderer
 from mistletoe.latex_renderer import LaTeXRenderer
 
+
 class MathJaxRenderer(HtmlRenderer, LaTeXRenderer):
     def __init__(self, **kwargs):
         """
@@ -20,9 +21,13 @@ class MathJaxRenderer(HtmlRenderer, LaTeXRenderer):
         """
         Convert single dollar sign enclosed expressions tio mathjax supported \( \) inline maht delimiters
         """
-        if token.content.startswith('$$') or token.content.startswith('\\[') or token.content.startswith('\\('):
+        if (
+            token.content.startswith("$$")
+            or token.content.startswith("\\[")
+            or token.content.startswith("\\(")
+        ):
             return self.render_raw_text(token)
-        return '\({}\)'.format(self.render_raw_text(token).strip('$'))
+        return "\({}\)".format(self.render_raw_text(token).strip("$"))
 
     def render_document(self, token):
         """
