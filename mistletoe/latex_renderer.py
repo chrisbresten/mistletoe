@@ -68,8 +68,21 @@ class LaTeXRenderer(BaseRenderer):
         self.packages['hyperref'] = []
         return '\\url{{{}}}'.format(self.escape_url(token.target))
 
-    @staticmethod
-    def render_math(token):
+    def render_math(self,token):
+        self.packages['amsmath']=[]
+        self.packages['amsfonts']=[]#these two are woth including
+        self.packages['amssymb']=[] #mathjax auto includes them when it detects symbols from them being used
+        #maybe its worth doing such detection but they are common enough that its safer to include them
+        #consistency with mathjax represents consistency with many sites rendering markdown
+        #and consistency with the overall convention amonst latex users
+        #if author is using line breaks in block math env,
+        #this is consistent with mathjax behavior but in general
+        #it needs ot be in a mathmode array, or other math environment(from amsmath, alternative to $$)
+        #i am checking that there is not some other environment being used first, in a sloppy way 
+        #but it is probably safer than attempting to check all environments that could include \\
+        if token.content[0:2]=='$$' and '\\\\' in token.content and not "\\begin\{" in token.content:
+            mathz = token.content.strip('$$')
+            return "$$\n\\begin{array}{cl}" + f"\n{mathz}\n" + "\\end{array}\n$$"
         return token.content
 
     def render_escape_sequence(self, token):
