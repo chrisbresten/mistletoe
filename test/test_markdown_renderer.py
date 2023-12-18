@@ -7,9 +7,9 @@ from mistletoe.markdown_renderer import MarkdownRenderer
 
 class TestMarkdownRenderer(unittest.TestCase):
     @staticmethod
-    def roundtrip(input):
+    def roundtrip(input, **rendererArgs):
         """Parses the given markdown input and renders it back to markdown again."""
-        with MarkdownRenderer() as renderer:
+        with MarkdownRenderer(**rendererArgs) as renderer:
             return renderer.render(Document(input))
 
     def test_empty_document(self):
@@ -90,6 +90,17 @@ class TestMarkdownRenderer(unittest.TestCase):
         output = self.roundtrip(input)
         self.assertEqual(output, "".join(input))
 
+    def test_multiline_fragment(self):
+        input = [
+            "[a link](<url-in-angle-brackets> '*emphasized\n",
+            "title\n",
+            "spanning\n",
+            "many\n",
+            "lines*')\n",
+        ]
+        output = self.roundtrip(input)
+        self.assertEqual(output, "".join(input))
+
     def test_thematic_break(self):
         input = [
             " **  * ** * ** * **\n",
@@ -119,11 +130,11 @@ class TestMarkdownRenderer(unittest.TestCase):
 
     def test_numbered_list(self):
         input = [
-            "  22)  *emphasized list item*\n",
-            "  96)\n",
+            "  22) *emphasized list item*\n",
+            "  96) \n",
             " 128) here begins a nested list.\n",
             "       + apples\n",
-            "       +  bananas\n",
+            "       + bananas\n",
         ]
         output = self.roundtrip(input)
         expected = [
@@ -145,6 +156,82 @@ class TestMarkdownRenderer(unittest.TestCase):
         ]
         output = self.roundtrip(input)
         self.assertEqual(output, "".join(input))
+
+    # we don't currently support keeping margin indentation:
+    def test_list_item_margin_indentation_not_preserved(self):
+        # 0 to 4 spaces of indentation from the margin
+        input = [
+            "- 0 space: ok.\n",
+            "  subsequent line.\n",
+            " - 1 space: ok.\n",
+            "   subsequent line.\n",
+            "  - 2 spaces: ok.\n",
+            "    subsequent line.\n",
+            "   - 3 spaces: ok.\n",
+            "     subsequent line.\n",
+            "    - 4 spaces: in the paragraph of the above list item.\n",
+            "      subsequent line.\n",
+        ]
+        output = self.roundtrip(input)
+        expected = [
+            "- 0 space: ok.\n",
+            "  subsequent line.\n",
+            "- 1 space: ok.\n",
+            "  subsequent line.\n",
+            "- 2 spaces: ok.\n",
+            "  subsequent line.\n",
+            "- 3 spaces: ok.\n",
+            "  subsequent line.\n",
+            "  - 4 spaces: in the paragraph of the above list item.\n",
+            "  subsequent line.\n",
+        ]
+        self.assertEqual(output, "".join(expected))
+
+    def test_list_item_indentation_after_leader_preserved(self):
+        # leaders followed by 1 to 5 spaces
+        input = [
+            "- 1 space: ok.\n",
+            "  subsequent line.\n",
+            "-  2 spaces: ok.\n",
+            "   subsequent line.\n",
+            "-   3 spaces: ok.\n",
+            "    subsequent line.\n",
+            "-    4 spaces: ok.\n",
+            "     subsequent line.\n",
+            "-     5 spaces: list item starting with indented code.\n",
+            "  subsequent line.\n",
+        ]
+        output = self.roundtrip(input)
+        self.assertEqual(output, "".join(input))
+
+    def test_list_item_indentation_after_leader_normalized(self):
+        # leaders followed by 1 to 5 spaces
+        input = [
+            "- 1 space: ok.\n",
+            "  subsequent line.\n",
+            "-  2 spaces: ok.\n",
+            "   subsequent line.\n",
+            "-   3 spaces: ok.\n",
+            "    subsequent line.\n",
+            "-    4 spaces: ok.\n",
+            "     subsequent line.\n",
+            "-     5 spaces: list item starting with indented code.\n",
+            "  subsequent line.\n",
+        ]
+        output = self.roundtrip(input, normalize_whitespace=True)
+        expected = [
+            "- 1 space: ok.\n",
+            "  subsequent line.\n",
+            "- 2 spaces: ok.\n",
+            "  subsequent line.\n",
+            "- 3 spaces: ok.\n",
+            "  subsequent line.\n",
+            "- 4 spaces: ok.\n",
+            "  subsequent line.\n",
+            "-     5 spaces: list item starting with indented code.\n",
+            "  subsequent line.\n",
+        ]
+        self.assertEqual(output, "".join(expected))
 
     def test_code_blocks(self):
         input = [

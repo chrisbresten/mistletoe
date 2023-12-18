@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import call, patch
 
+from parameterized import parameterized
+
 from mistletoe import block_token, block_tokenizer, span_token
 
 
@@ -375,22 +377,27 @@ class TestTable(unittest.TestCase):
         self.assertEqual(test_func('------:'), 1)
 
     def test_parse_delimiter(self):
-        test_func = block_token.Table.split_delimiter
-        self.assertEqual(list(test_func('| :--- | :---: | ---:|\n')),
-                [':---', ':---:', '---:'])
+        test_func = lambda s : block_token.Table.split_delimiter(s)
+        self.assertEqual(list(test_func('|-| :--- | :---: | ---:|\n')),
+                ['-', ':---', ':---:', '---:'])
 
-    def test_match(self):
+    @parameterized.expand([
+        ('| --- | --- | --- |\n'),
+        ('| - | - | - |\n'),
+        ('|-|-|-- \n'),
+    ])
+    def test_match(self, delimiter_line):
         lines = ['| header 1 | header 2 | header 3 |\n',
-                 '| --- | --- | --- |\n',
+                delimiter_line,
                  '| cell 1 | cell 2 | cell 3 |\n',
                  '| more 1 | more 2 | more 3 |\n']
         with patch('mistletoe.block_token.TableRow') as mock:
-            token = next(iter(block_token.tokenize(lines)))
+            token, = block_token.tokenize(lines)
             self.assertIsInstance(token, block_token.Table)
             self.assertTrue(hasattr(token, 'header'))
             self.assertEqual(token.column_align, [None, None, None])
             token.children
-            calls = [call(line, [None, None, None]) for line in lines[:1]+lines[2:]]
+            calls = [call(line, [None, None, None], line_number) for line_number, line in enumerate(lines, start=1) if line_number != 2]
             mock.assert_has_calls(calls)
 
     def test_easy_table(self):
@@ -403,7 +410,7 @@ class TestTable(unittest.TestCase):
             self.assertTrue(hasattr(token, 'header'))
             self.assertEqual(token.column_align, [1, None])
             token.children
-            calls = [call(line, [1, None]) for line in lines[:1] + lines[2:]]
+            calls = [call(line, [1, None], line_number) for line_number, line in enumerate(lines, start=1) if line_number != 2]
             mock.assert_has_calls(calls)
 
     def test_not_easy_table(self):
@@ -433,44 +440,44 @@ class TestTableRow(unittest.TestCase):
     def test_match(self):
         with patch('mistletoe.block_token.TableCell') as mock:
             line = '| cell 1 | cell 2 |\n'
-            token = block_token.TableRow(line)
+            token = block_token.TableRow(line, line_number=10)
             self.assertEqual(token.row_align, [None])
-            mock.assert_has_calls([call('cell 1', None), call('cell 2', None)])
+            mock.assert_has_calls([call('cell 1', None, 10), call('cell 2', None, 10)])
 
     def test_easy_table_row(self):
         with patch('mistletoe.block_token.TableCell') as mock:
             line = 'cell 1 | cell 2\n'
-            token = block_token.TableRow(line)
+            token = block_token.TableRow(line, line_number=10)
             self.assertEqual(token.row_align, [None])
-            mock.assert_has_calls([call('cell 1', None), call('cell 2', None)])
+            mock.assert_has_calls([call('cell 1', None, 10), call('cell 2', None, 10)])
 
     def test_short_row(self):
         with patch('mistletoe.block_token.TableCell') as mock:
             line = '| cell 1 |\n'
-            token = block_token.TableRow(line, [None, None])
+            token = block_token.TableRow(line, [None, None], 10)
             self.assertEqual(token.row_align, [None, None])
-            mock.assert_has_calls([call('cell 1', None), call('', None)])
+            mock.assert_has_calls([call('cell 1', None, 10), call('', None, 10)])
 
     def test_escaped_pipe_in_cell(self):
         with patch('mistletoe.block_token.TableCell') as mock:
             line = '| pipe: `\\|` | cell 2\n'
-            token = block_token.TableRow(line, [None, None])
+            token = block_token.TableRow(line, line_number=10, row_align=[None, None])
             self.assertEqual(token.row_align, [None, None])
-            mock.assert_has_calls([call('pipe: `|`', None), call('cell 2', None)])
+            mock.assert_has_calls([call('pipe: `|`', None, 10), call('cell 2', None, 10)])
     
     @unittest.skip('Even GitHub fails in here, workaround: always put a space before `|`')
     def test_not_really_escaped_pipe_in_cell(self):
         with patch('mistletoe.block_token.TableCell') as mock:
             line = '|ending with a \\\\|cell 2\n'
-            token = block_token.TableRow(line, [None, None])
+            token = block_token.TableRow(line, [None, None], 10)
             self.assertEqual(token.row_align, [None, None])
-            mock.assert_has_calls([call('ending with a \\\\', None), call('cell 2', None)])
+            mock.assert_has_calls([call('ending with a \\\\', None, 10), call('cell 2', None, 10)])
 
 
 class TestTableCell(TestToken):
     def test_match(self):
-        token = block_token.TableCell('cell 2')
-        self._test_token(token, 'cell 2', align=None)
+        token = block_token.TableCell('cell 2', line_number=13)
+        self._test_token(token, 'cell 2', line_number=13, align=None)
 
 
 class TestFootnote(unittest.TestCase):

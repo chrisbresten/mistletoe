@@ -51,7 +51,7 @@ class LinkReferenceDefinition(span_token.SpanToken):
 class LinkReferenceDefinitionBlock(block_token.Footnote):
     """
     A sequence of link reference definitions.
-    This is a container block token. Its children are link reference definition tokens.
+    This is a leaf block token. Its children are link reference definition tokens.
 
     This class inherits from `Footnote` and modifies the behavior of the constructor,
     to keep the tokens in the AST.
@@ -92,11 +92,22 @@ class MarkdownRenderer(BaseRenderer):
 
     _whitespace = re.compile(r"\s+")
 
-    def __init__(self, *extras, max_line_length: int = None):
+    def __init__(
+        self,
+        *extras,
+        max_line_length: int = None,
+        normalize_whitespace=False
+    ):
         """
-        If `max_line_length` is specified, the document is word wrapped to the
-        specified line length when rendered. Otherwise the formatting from the
-        original (parsed) document is retained as much as possible.
+        Args:
+            extras (list): allows subclasses to add even more custom tokens.
+            max_line_length (int): if specified, the document is word wrapped to the
+                specified line length when rendered. Otherwise the formatting from the
+                original (parsed) document is retained as much as possible.
+            normalize_whitespace (bool): if `False`, the renderer will try to preserve
+                as much whitespace as it currently can. For example, you can
+                use this flag to control whether to replace the original
+                spacing after every list item leader with just 1 space.
         """
         block_token.remove_token(block_token.Footnote)
         super().__init__(
@@ -116,6 +127,7 @@ class MarkdownRenderer(BaseRenderer):
             "LinkReferenceDefinition"
         ] = self.render_link_reference_definition
         self.max_line_length = max_line_length
+        self.normalize_whitespace = normalize_whitespace
 
     def render(self, token: token.Token) -> str:
         """
@@ -302,7 +314,7 @@ class MarkdownRenderer(BaseRenderer):
     def render_list_item(
         self, token: block_token.ListItem, max_line_length: int
     ) -> Iterable[str]:
-        indentation = len(token.leader) + 1
+        indentation = len(token.leader) + 1 if self.normalize_whitespace else token.prepend - token.indentation
         max_child_line_length = (
             max_line_length - indentation if max_line_length else None
         )
@@ -310,7 +322,9 @@ class MarkdownRenderer(BaseRenderer):
             token.children, max_line_length=max_child_line_length
         )
         return self.prefix_lines(
-            list(lines) or [""], token.leader + " ", " " * indentation
+            list(lines) or [""],
+            token.leader + " " * (indentation - len(token.leader)),
+            " " * indentation
         )
 
     def render_table(
@@ -409,7 +423,7 @@ class MarkdownRenderer(BaseRenderer):
                 if "\n" in fragment.text:
                     lines = fragment.text.split("\n")
                     yield current_line + lines[0]
-                    for inner_line in lines[1:-2]:
+                    for inner_line in lines[1:-1]:
                         yield inner_line
                     current_line = lines[-1]
                 else:
